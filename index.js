@@ -72,6 +72,9 @@ return res.status(status).json({
      message:message
 })
 })
+app.get('/', (req, res) => {
+  res.status(200).send('API is working on Vercell!');
+});
 app.listen(6000,()=>{
      console.log("The server runs on 6000")
 })
