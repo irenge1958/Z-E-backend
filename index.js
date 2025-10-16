@@ -1,6 +1,4 @@
 const express=require("express")
-const morgan=require("morgan")
-const helmet=require("helmet")
 const dotenv=require("dotenv")
 const authRoute=require("./route/auth")
 const user=require("./route/user")
