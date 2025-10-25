@@ -1,75 +1,94 @@
-const express=require("express")
-const dotenv=require("dotenv")
-const authRoute=require("./route/auth")
-const user=require("./route/user")
-const product=require("./route/product")
-const mongoose=require("mongoose")
-const cors = require('cors');
-const cookieParser = require('cookie-parser');
-const paypal = require('paypal-rest-sdk');
-const sendEnquiryEmail = require('./route/email');
-paypal.configure({
-  mode: 'sandbox', // 'sandbox' for testing, 'live' for production
-  client_id: 'AbwmkIitBIFOhksg60DUElh-NVWH8IBuBKYuGAeDSmtWafTf7Sl0DIy6V3uYRipJ0UVx-zOoyP47Hlb-',
-  client_secret: 'EOFlZqLD-_fQhoQ_j9BhSxHkM7c5cfI2WBM5gYnyN64rQS1PhqogSK8eherHeavKNhwRk-Gzl3p1bKwp'
+const express = require("express");
+const dotenv = require("dotenv");
+const authRoute = require("./route/auth");
+const user = require("./route/user");
+const product = require("./route/product");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const cookieParser = require("cookie-parser");
+const paypal = require("@paypal/checkout-server-sdk");
+const sendEnquiryEmail = require("./route/email");
+
+dotenv.config();
+
+const app = express();
+
+// ✅ MongoDB Connection
+mongoose.connect(process.env.code_db)
+  .then(() => console.log("✅ Successfully connected to the database"))
+  .catch((err) => console.error("❌ Database connection failed:", err));
+
+// ✅ CORS Setup
+app.use(cors({
+  origin: "*", // Or specify your frontend domain
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept"]
+}));
+
+app.use(cookieParser());
+app.use(express.json());
+
+// ✅ PayPal SDK Configuration (Modern)
+const environment = new paypal.core.SandboxEnvironment(
+  process.env.PAYPAL_CLIENT_ID,
+  process.env.PAYPAL_CLIENT_SECRET
+);
+const client = new paypal.core.PayPalHttpClient(environment);
+
+// ✅ Create PayPal Order
+app.post("/api/paypal/create-payment", async (req, res) => {
+  try {
+    console.log("💰 Received amount:", req.body.amount);
+
+    const request = new paypal.orders.OrdersCreateRequest();
+    request.prefer("return=representation");
+    request.requestBody({
+      intent: "CAPTURE",
+      purchase_units: [
+        {
+          amount: {
+            currency_code: "USD",
+            value: req.body.amount
+          },
+          description: "Payment for order"
+        }
+      ],
+      application_context: {
+        return_url: "http://localhost:3000/success",
+        cancel_url: "http://localhost:3000/cancel"
+      }
+    });
+
+    const order = await client.execute(request);
+    console.log("✅ PayPal Order Created:", order.result.id);
+    res.status(200).json(order.result);
+
+  } catch (error) {
+    console.error("❌ PayPal Error:", error);
+    res.status(500).json({ error: "PayPal order creation failed", details: error.message });
+  }
 });
 
-const app=express()
-dotenv.config()
-mongoose.connect(process.env.code_db);
-mongoose.connection.on('connected', () => {
-     console.log('Successfully connected to the database');
- });
- app.use(cors({
-  origin: "*", // or specify a specific origin like 'http://localhost:3000'
-  methods: ['GET', 'POST', 'PUT', 'DELETE'], // specify allowed methods
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'], // specify allowed headers
-}));
- app.use(cookieParser())
- app.use(express.json())
- app.post('/api/paypal/create-payment', (req, res) => {
-     console.log('Received amount:', req.body.amount); // Log the amount
-     const create_payment_json = {
-       intent: 'sale',
-       payer: {
-         payment_method: 'paypal'
-       },
-       transactions: [{
-         amount: {
-           currency: 'USD',
-           total: req.body.amount
-         },
-         description: 'Payment for order'
-       }],
-       redirect_urls: {
-         return_url: 'http://localhost:3000/success', // Adjust for your app
-         cancel_url: 'http://localhost:3000/cancel'
-       }
-     };
-   
-     paypal.payment.create(create_payment_json, (error, payment) => {
-       if (error) {
-         res.status(500).send(error);
-       } else {
-         res.send(payment);
-         console.log(payment)
-       }
-     });
-   });
-   
-app.use('/auth/',authRoute)
-app.use('/user/',user)
-app.use('/product/',product)
-app.use('/api/send-enquiry/', sendEnquiryEmail);
-app.use((err,req,res,next)=>{
-const status=err.status || 500
-const message=err.message || 'Something Went Wrong'
-return res.status(status).json({
-     success:'failure',
-     status:status,
-     message:message
-})
-})
-app.get('/', (req, res) => {
-  res.status(200).send('API is working on Vercell!');
+// ✅ Routes
+app.use("/auth", authRoute);
+app.use("/user", user);
+app.use("/product", product);
+app.use("/api/send-enquiry", sendEnquiryEmail);
+
+// ✅ Error Handler
+app.use((err, req, res, next) => {
+  const status = err.status || 500;
+  const message = err.message || "Something Went Wrong";
+  return res.status(status).json({
+    success: false,
+    status,
+    message
+  });
 });
+
+// ✅ Root Endpoint
+app.get("/", (req, res) => {
+  res.status(200).send("🚀 API is working perfectly on Vercel!");
+});
+
+module.exports = app; // ✅ Important for Vercel Serverless Functions
