@@ -20,7 +20,7 @@ mongoose.connect(process.env.code_db)
 
 // ✅ CORS Setup
 app.use(cors({
-  origin: "*", // Or specify your frontend domain
+  origin: ['https://e-commerce-chi-liart-80.vercel.app'], // Or specify your frontend domain
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization", "Accept"]
 }));
